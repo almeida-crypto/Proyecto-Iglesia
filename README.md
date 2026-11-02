@@ -78,7 +78,6 @@ Los permisos se validan en el servidor (`server/auth.js`); la interfaz solo ocul
 - **Libros privados:** solo los ven los usuarios con sesión iniciada. El servidor no entrega el archivo a nadie más, aunque conozca la dirección.
 - Formatos PDF (se leen dentro del sistema) y EPUB (se descargan). Se verifica que el archivo sea realmente un PDF o EPUB.
 - La portada es opcional; si no se sube, se genera una con el título.
-- Suba solo materiales propios de la iglesia o con permiso de distribución.
 
 ## Estructura
 
