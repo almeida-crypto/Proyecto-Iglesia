@@ -14,6 +14,74 @@ import * as settings from './views/settings.js';
 import * as profile from './views/profile.js';
 import * as library from './views/library.js';
 
+// ---------- Gestión de Tema (Modo Claro / Modo Oscuro) ----------
+export function getStoredTheme() {
+  try {
+    return localStorage.getItem('theme');
+  } catch {
+    return null;
+  }
+}
+
+export function getCurrentTheme() {
+  return document.documentElement.getAttribute('data-theme') || (getStoredTheme() === 'dark' ? 'dark' : 'light');
+}
+
+export function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) {
+    metaTheme.content = theme === 'dark' ? '#18090d' : '#4a121c';
+  }
+  updateThemeUI(theme);
+  updateChartTheme();
+}
+
+export function toggleTheme() {
+  const current = getCurrentTheme();
+  const next = current === 'dark' ? 'light' : 'dark';
+  try {
+    localStorage.setItem('theme', next);
+  } catch {}
+  applyTheme(next);
+}
+
+function updateThemeUI(theme) {
+  const isDark = theme === 'dark';
+  document.querySelectorAll('.theme-toggle-btn').forEach((btn) => {
+    const iconSpan = btn.querySelector('.theme-icon');
+    if (iconSpan) iconSpan.innerHTML = icon(isDark ? 'sun' : 'moon');
+    const labelSpan = btn.querySelector('.theme-label');
+    if (labelSpan) labelSpan.textContent = isDark ? 'Modo claro' : 'Modo oscuro';
+    btn.setAttribute('aria-label', isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+    btn.setAttribute('title', isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+  });
+}
+
+function updateChartTheme() {
+  if (!window.Chart) return;
+  const styles = getComputedStyle(document.documentElement);
+  const textColor = styles.getPropertyValue('--muted').trim() || (getCurrentTheme() === 'dark' ? '#96887c' : '#7d6e5e');
+  const gridColor = styles.getPropertyValue('--border').trim() || (getCurrentTheme() === 'dark' ? '#382e27' : '#ece3d3');
+  window.Chart.defaults.color = textColor;
+  window.Chart.defaults.borderColor = gridColor;
+
+  if (window.Chart.instances) {
+    Object.values(window.Chart.instances).forEach((instance) => {
+      if (instance?.options?.scales) {
+        Object.values(instance.options.scales).forEach((scale) => {
+          if (scale.ticks) scale.ticks.color = textColor;
+          if (scale.grid) scale.grid.color = gridColor;
+        });
+      }
+      instance.update();
+    });
+  }
+}
+
+// Aplicar tema inicial (predeterminado en modo claro a menos que el usuario haya guardado 'dark')
+applyTheme(getStoredTheme() === 'dark' ? 'dark' : 'light');
+
 const state = { user: null, settings: null, meta: null };
 const can = (perm) => !!state.user?.permissions.includes(perm);
 
@@ -68,6 +136,9 @@ function renderShell() {
   const s = state.settings || {};
   const u = state.user;
   const initials = u.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const currentTheme = getCurrentTheme();
+  const isDark = currentTheme === 'dark';
+
   root.innerHTML = `
     <div class="layout">
       <aside class="sidebar">
@@ -82,6 +153,10 @@ function renderShell() {
             <div class="avatar">${esc(initials)}</div>
             <div><strong>${esc(u.name)}</strong><span>${esc(state.meta.roles[u.role])}</span></div>
           </a>
+          <button class="nav-btn theme-toggle-btn" id="theme-desktop" aria-label="${isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}">
+            <span class="theme-icon">${icon(isDark ? 'sun' : 'moon')}</span>
+            <span class="theme-label">${isDark ? 'Modo claro' : 'Modo oscuro'}</span>
+          </button>
           <button class="nav-btn" id="logout">${icon('logout')}<span>Cerrar sesión</span></button>
         </div>
       </aside>
@@ -90,13 +165,23 @@ function renderShell() {
         <header class="topbar">
           <button class="icon-btn" id="menu" aria-label="Menú">${icon('menu')}</button>
           <strong>${esc(s.name || 'Mi Iglesia')}</strong>
+          <button class="icon-btn theme-toggle-btn" id="theme-mobile" aria-label="${isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}" style="margin-left: auto;">
+            <span class="theme-icon">${icon(isDark ? 'sun' : 'moon')}</span>
+          </button>
         </header>
         <main id="main"></main>
       </div>
     </div>`;
+
   const layout = root.querySelector('.layout');
   root.querySelector('#menu').addEventListener('click', () => layout.classList.toggle('menu-open'));
   root.querySelector('.backdrop').addEventListener('click', () => layout.classList.remove('menu-open'));
+  
+  // Listeners para alternar tema
+  root.querySelectorAll('.theme-toggle-btn').forEach((btn) => {
+    btn.addEventListener('click', toggleTheme);
+  });
+
   root.querySelector('#logout').addEventListener('click', async () => {
     await api('/auth/logout', { method: 'POST' }).catch(() => {});
     state.user = null;
@@ -146,9 +231,10 @@ async function route() {
 
 async function boot() {
   if (window.Chart) {
+    const styles = getComputedStyle(document.documentElement);
     window.Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
-    window.Chart.defaults.color = '#7d6e5e';
-    window.Chart.defaults.borderColor = '#ece3d3';
+    window.Chart.defaults.color = styles.getPropertyValue('--muted').trim() || '#7d6e5e';
+    window.Chart.defaults.borderColor = styles.getPropertyValue('--border').trim() || '#ece3d3';
   }
   state.settings = await api('/public/settings').catch(() => null);
   try {
@@ -166,6 +252,17 @@ async function boot() {
     navigate('login');
   });
   route();
+
+  // Registro del Service Worker para soporte PWA
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        console.log('Service Worker registrado con éxito:', reg.scope);
+      }).catch((err) => {
+        console.warn('Error al registrar Service Worker:', err);
+      });
+    });
+  }
 }
 
 boot();

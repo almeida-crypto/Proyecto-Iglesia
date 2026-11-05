@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="gradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5e1620"/>
+      <stop offset="100%" stop-color="#250a0f"/>
+    </linearGradient>
+  </defs>
+  <!-- Full bleed for maskable safe area -->
+  <rect width="512" height="512" fill="url(#gradMask)"/>
+  <circle cx="256" cy="256" r="220" fill="none" stroke="#b8892b" stroke-width="6" opacity="0.6"/>
+  <!-- Cross centered within safe zone -->
+  <path d="M256 120v272M188 208h136" stroke="#f3d58f" stroke-width="26" stroke-linecap="round"/>
+  <!-- Arch -->
+  <path d="M176 352c0-44 36-80 80-80s80 36 80 80" fill="none" stroke="#b8892b" stroke-width="10" stroke-linecap="round"/>
+</svg>
